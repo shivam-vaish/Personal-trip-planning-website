@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
+  <title>My trip - Travel Planner & Expense Tracker</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            appBg: 'var(--bg)',
+            appCard: 'var(--card)',
+            appInk: 'var(--ink)',
+            appMuted: 'var(--muted)',
+            appLine: 'var(--line)',
+            appAccent: 'var(--accent)',
+            appSoft: 'var(--soft)'
+          },
+          fontFamily: {
+            heading: ['"Bricolage Grotesque"', 'sans-serif'],
+            body: ['"Figtree"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS & JS for Interactive Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --bg: #EAF0F7;
+      --card: #FFFFFF;
+      --ink: #0F1B2D;
+      --muted: #5A6B82;
+      --line: #D5DEEA;
+      --accent: #2F5BEA;
+      --soft: #F4F7FB;
+    }
+
+    .dark {
+      --bg: #101726;
+      --card: #1A2436;
+      --ink: #F1F5F9;
+      --muted: #94A3B8;
+      --line: #2D3D54;
+      --accent: #4F75FF;
+      --soft: #141E2E;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: 'Figtree', sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    h1, h2, h3, .font-heading {
+      font-family: 'Bricolage Grotesque', sans-serif;
+    }
+
+    /* Custom Scrollbar */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .glass-nav {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* Leaflet Custom Styling */
+    #tripMap {
+      height: 420px;
+      z-index: 10;
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: 1rem;
+      padding: 0.25rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+    .dark .leaflet-popup-content-wrapper,
+    .dark .leaflet-popup-tip {
+      background-color: #1e293b;
+      color: #f8fafc;
+    }
+    .custom-map-pin {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      border: 3px solid white;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-16 antialiased selection:bg-blue-500 selection:text-white">
+
+  <!-- Main Wrapper -->
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
+    
+    <!-- Top Utility & Navigation Bar -->
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center space-x-3">
+        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold text-xs rounded-full uppercase tracking-wider flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+          Trip Planner & Budget
+        </span>
+        <span id="syncStatusBadge" class="hidden px-2.5 py-0.5 font-semibold text-[11px] rounded-full flex items-center gap-1">
+          <!-- Dynamic Status -->
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Theme Toggle -->
+        <button id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Light/Dark Mode" class="p-2.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-all shadow-sm">
+          <svg id="sunIcon" class="w-5 h-5 hidden dark:block text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg id="moonIcon" class="w-5 h-5 block dark:hidden text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+
+        <!-- Settings / Setup Button -->
+        <button onclick="openSettingsModal()" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-all shadow-sm">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Setup & Sync</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Hero Title & Info Section -->
+    <div class="mb-6">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 id="heroTitle" class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+            My trip
+          </h1>
+          <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 mt-3 text-sm sm:text-base font-medium">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span id="heroDestination">Destination</span>
+            </span>
+            <span>•</span>
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <span id="heroDates">-</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Crew Avatars -->
+        <div class="flex items-center gap-3 bg-white dark:bg-slate-800/80 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm self-start md:self-auto">
+          <div id="crewAvatars" class="flex items-center -space-x-2 overflow-hidden"></div>
+          <button onclick="openSettingsModal()" title="Manage Travelers" class="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center justify-center hover:bg-blue-100 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grand Trip Total Header & Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <!-- Total Expenditure Card -->
+      <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-md flex flex-col justify-between">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-blue-200 flex items-center gap-1.5">
+            <span>💰</span> Total Trip Expenditure
+          </span>
+          <h2 id="grandTotalDisplay" class="text-3xl sm:text-4xl font-heading font-extrabold mt-2 tracking-tight">₹0</h2>
+        </div>
+        <p class="text-xs text-blue-100/80 mt-4 font-medium">Calculated live across all daily itinerary events</p>
+      </div>
+
+      <!-- Quick Days Stat -->
+      <div class="bg-white dark:bg-slate-800/90 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Scheduled Duration</span>
+        <h2 id="totalDaysDisplay" class="text-3xl font-heading font-extrabold text-slate-900 dark:text-white mt-2">0 Days</h2>
+        <p id="dateRangeDisplay" class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-4">-</p>
+      </div>
+
+      <!-- Total Activities Stat -->
+      <div class="bg-white dark:bg-slate-800/90 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Bookings & Events</span>
+        <h2 id="totalEventsDisplay" class="text-3xl font-heading font-extrabold text-slate-900 dark:text-white mt-2">0 Items</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-4">Flights, Stays, Cabs, Food & Activities</p>
+      </div>
+    </div>
+
+    <!-- Multi-Pin Journey Map Section -->
+    <section id="mapSection" class="bg-white dark:bg-slate-800/90 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm mb-8 transition-all scroll-mt-20">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2.5 bg-blue-50 dark:bg-blue-950/50 rounded-2xl text-blue-600 dark:text-blue-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Trip Interactive Route Map</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">All trip locations pinned on a single map. Click pins to view activity details.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Route Line:</label>
+          <select id="mapDayFilter" onchange="updateMapRouteLine()" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs font-semibold outline-none">
+            <option value="all">Show Entire Trip Route</option>
+          </select>
+          <button onclick="resetMapView()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition">
+            Reset View
+          </button>
+        </div>
+      </div>
+
+      <div class="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner">
+        <div id="tripMap" class="w-full"></div>
+      </div>
+    </section>
+
+    <!-- Built-in Interactive Calendar Grid -->
+    <section class="bg-white dark:bg-slate-800/90 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm mb-8 transition-all">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <div class="p-2 bg-blue-50 dark:bg-blue-950/50 rounded-xl text-blue-600 dark:text-blue-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Trip Schedule Overview</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Click any highlighted date to jump directly to its timeline</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="changeCalMonth(-1)" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="calendarMonthYear" class="font-bold text-sm text-slate-800 dark:text-slate-200 min-w-[110px] text-center"></span>
+          <button onclick="changeCalMonth(1)" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-7 gap-1 text-center font-bold text-[11px] text-slate-400 dark:text-slate-500 mb-2 tracking-wider">
+        <div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div>
+      </div>
+
+      <div id="calendarGrid" class="grid grid-cols-7 gap-1.5"></div>
+
+      <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-xs text-slate-500 dark:text-slate-400">
+        <span class="flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-md bg-blue-100 dark:bg-blue-950 border border-blue-400 dark:border-blue-700"></span>
+          <span>Trip Date</span>
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+          <span>Scheduled Events</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- Navigation Filter Bar -->
+    <div class="sticky top-4 z-20 mb-8">
+      <div class="glass-nav bg-white/80 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-md flex items-center justify-between gap-2 backdrop-blur-md">
+        <nav class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+          <button id="tabAll" onclick="setTab('all')" class="tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 bg-blue-600 text-white shadow-sm">
+            All Timeline
+          </button>
+          <button id="tabDays" onclick="setTab('days')" class="tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60">
+            Days
+          </button>
+          <button id="tabBookings" onclick="setTab('bookings')" class="tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 flex items-center gap-1.5">
+            <span>Bookings & Transport</span>
+            <span id="bookingBadgeCount" class="bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded-full font-bold">0</span>
+          </button>
+        </nav>
+
+        <button onclick="openEventModal()" class="px-3.5 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5 shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          <span class="hidden sm:inline">Add Event</span>
+          <span class="sm:hidden">Add</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="space-y-8">
+      <div id="itineraryContainer" class="space-y-8"></div>
+
+      <div class="flex justify-center pt-2 pb-4">
+        <button onclick="addNewDay()" class="px-6 py-3 bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-400 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-2xl font-semibold text-sm transition-all flex items-center gap-2 shadow-sm group">
+          <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Add Another Day</span>
+        </button>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Event Modal (Add / Edit Event & Cost) -->
+  <div id="eventModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transform scale-95 transition-transform duration-200">
+      
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+        <h3 id="eventModalTitle" class="text-lg font-bold text-slate-900 dark:text-white">Add New Event</h3>
+        <button onclick="closeEventModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form id="eventForm" onsubmit="handleSaveEvent(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <input type="hidden" id="eventId">
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Select Day</label>
+          <select id="eventDayIndex" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Event Category</label>
+          <div class="grid grid-cols-4 gap-2" id="categoryOptions"></div>
+          <input type="hidden" id="eventType" value="flight">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Title</label>
+          <input type="text" id="eventTitleInput" placeholder="e.g. Flight 6E 204 to Goa" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Amount Spent (₹)</label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-2.5 font-bold text-slate-400">₹</span>
+            <input type="number" id="eventAmountInput" placeholder="0" step="any" min="0" class="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Location / Search Place</label>
+          <div class="flex gap-2">
+            <input type="text" id="eventLocationInput" placeholder="e.g. Benaulim Beach, Goa" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+            <button type="button" onclick="geocodeLocationSearch()" class="px-3.5 py-2.5 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 text-blue-600 dark:text-blue-300 rounded-xl font-bold text-xs shrink-0 transition">
+              🔍 Find Coordinates
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Latitude (Lat)</label>
+            <input type="number" step="any" id="eventLatInput" placeholder="15.2644" class="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono outline-none">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Longitude (Lng)</label>
+            <input type="number" step="any" id="eventLngInput" placeholder="73.9149" class="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Google Maps Direct URL (Optional)</label>
+          <div class="relative">
+            <span class="absolute left-3 top-2.5 text-slate-400">🗺️</span>
+            <input type="url" id="eventMapUrlInput" placeholder="https://maps.google.com/..." class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none text-xs">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Start Time</label>
+            <input type="time" id="eventStartTimeInput" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">End Time (Optional)</label>
+            <input type="time" id="eventEndTimeInput" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Assigned Travelers</label>
+          <div id="crewSelectionList" class="flex flex-wrap gap-2 pt-1"></div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Notes / Booking Ref</label>
+          <textarea id="eventNotesInput" rows="2" placeholder="PNR, Confirmation code, tips..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-700/60">
+          <button type="button" onclick="closeEventModal()" class="px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all">
+            Save Event
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transform scale-95 transition-transform duration-200">
+      
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Trip Settings & Integrations</h3>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form id="settingsForm" onsubmit="handleSaveSettings(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+
+        <!-- Supabase Status Panel (keys now live in the code, not here) -->
+        <div class="p-4 bg-blue-50/70 dark:bg-blue-950/40 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <span>⚡</span> Supabase Real-Time Backend
+            </span>
+            <span id="supabaseConnBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">Not Connected</span>
+          </div>
+          <p class="text-[11px] text-slate-600 dark:text-slate-300">Trip data and booking files are stored in Supabase and shared live with everyone who opens this page.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Trip Name</label>
+          <input type="text" id="settingsTitle" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Destination(s)</label>
+          <input type="text" id="settingsDestination" placeholder="e.g. Goa, India" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Start Date</label>
+          <input type="date" id="settingsStartDate" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Travelers / Crew (Comma Separated)</label>
+          <input type="text" id="settingsPeople" placeholder="Alex, Sam, Jordan" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-700/60">
+          <button type="button" onclick="closeSettingsModal()" class="px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all">
+            Save Settings
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    // =====================================================================
+    //  API KEYS - THE ONLY PLACE YOU NEED TO EDIT
+    //  Supabase dashboard -> Project Settings -> API
+    //  Use the "anon" / "publishable" key. NEVER the "service_role" / secret key.
+    // =====================================================================
+    const SUPABASE_URL = 'https://YOUR-PROJECT-ID.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR-ANON-OR-PUBLISHABLE-KEY';
+    // =====================================================================
+
+    const STORAGE_BUCKET = 'trip-files';   // must match the bucket created in SQL
+    const TRIP_ROW_ID = 1;                 // row in the "trips" table that holds this trip
+    const TIMEZONE = 'Asia/Kolkata';       // used for Google Calendar links
+
+    let supabaseClient = null;
+    let saveErrorShown = false;
+
+    // localStorage can throw inside sandboxed embeds (e.g. Google Sites), so wrap it.
+    const safeStore = {
+      get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    };
+
+    function uid(prefix) { return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7); }
+
+    // Escape text before putting it into HTML (stops apostrophes/quotes breaking the page)
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // Blank starting trip (real data loads from Supabase)
+    let state = (() => {
+      try { const cached = JSON.parse(safeStore.get('my_trip_data')); if (cached) return cached; } catch (e) {}
+      return {
+        title: "My trip",
+        destination: "",
+        startDate: "2026-12-01",
+        timezone: TIMEZONE,
+        people: [],
+        days: [{ id: "day-1", events: [] }]
+      };
+    })();
+
+    const CATEGORIES = {
+      flight:   { label: "Flight",   color: "#3B82F6", bgClass: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800", icon: `<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-1-3-.5-4.5 1L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5.1 1.3.7 1.3L9 12l-2 3H4l-2 3 3-1 2 2 3-1v-3l3 0.5 5.3 3.7c.3.4.8.4 1.2.2z"/>` },
+      stay:     { label: "Stay",     color: "#7A4FD6", bgClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800", icon: `<path d="M3 10v11h18V9L12 3zm2 9v-6h4v6zm14 0h-4v-6h4z"/>` },
+      train:    { label: "Train",    color: "#1E8A5A", bgClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800", icon: `<path d="M12 2c-4 0-7 1-7 5v9c0 2 1.5 3 3.5 3L7 21v1h2l1.5-2h3l1.5 2h2v-1l-1.5-2c2 0 3.5-1 3.5-3V7c0-4-3-5-7-5zm-5 5h10v3H7zm1.5 9c-.8 0-1.5-.7-1.5-1.5S7.7 13 8.5 13s1.5.7 1.5 1.5S9.3 16 8.5 16zm7 0c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/>` },
+      bus:      { label: "Bus",      color: "#0E8A85", bgClass: "bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800", icon: `<path d="M4 16c0 1.1.9 2 2 2h1v2h2v-2h6v2h2v-2h1c1.1 0 2-.9 2-2V6c0-3.5-3.5-4-9-4s-9 .5-9 4v10zm3.5 0c-.8 0-1.5-.7-1.5-1.5S6.7 13 7.5 13s1.5.7 1.5 1.5S8.3 16 7.5 16zm9 0c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5zM6 5h12v5H6V5z"/>` },
+      cab:      { label: "Cab",      color: "#4A5A7D", bgClass: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700", icon: `<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>` },
+      food:     { label: "Food",     color: "#C77700", bgClass: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800", icon: `<path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>` },
+      activity: { label: "Activity", color: "#D2416E", bgClass: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800", icon: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>` },
+      note:     { label: "Note",     color: "#6B7A8F", bgClass: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700", icon: `<path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>` }
+    };
+
+    let activeTab = "all";
+    let calendarViewDate = null;
+    let leafletMap = null;
+    let mapMarkers = {};
+    let routePolyline = null;
+    let targetCardIdForUpload = null;
+
+    // Initial Load
+    window.onload = function() {
+      const theme = safeStore.get('theme');
+      if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+
+      initLeafletMap();
+      populateCategoryOptions();
+      renderAll();
+      initSupabaseSync();
+    };
+
+    function saveState() {
+      safeStore.set('my_trip_data', JSON.stringify(state));
+      renderAll();
+      syncToDatabase();
+    }
+
+    function renderAll() {
+      renderHeaderInfo();
+      renderCrewAvatars();
+      renderSummaryCards();
+      renderBuiltInCalendar();
+      renderItinerary();
+      updateMapPins();
+      updateMapDayFilterDropdown();
+    }
+
+    // --- LEAFLET MULTI-PIN MAP IMPLEMENTATION ---
+    function initLeafletMap() {
+      if (leafletMap || !window.L) return;
+      leafletMap = L.map('tripMap').setView([31.1048, 77.1734], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(leafletMap);
+    }
+
+    function updateMapPins() {
+      if (!leafletMap) return;
+      Object.values(mapMarkers).forEach(marker => leafletMap.removeLayer(marker));
+      mapMarkers = {};
+
+      if (routePolyline) {
+        leafletMap.removeLayer(routePolyline);
+        routePolyline = null;
+      }
+
+      const bounds = [];
+      state.days.forEach((day, dayIdx) => {
+        day.events.forEach((ev) => {
+          if (ev.lat && ev.lng) {
+            const cat = CATEGORIES[ev.type] || CATEGORIES.note;
+            const latLng = [parseFloat(ev.lat), parseFloat(ev.lng)];
+            bounds.push(latLng);
+
+            const customIcon = L.divIcon({
+              className: 'custom-pin-wrapper',
+              html: `<div class="custom-map-pin" style="background-color: ${cat.color}">${esc(ev.type.charAt(0).toUpperCase())}</div>`,
+              iconSize: [34, 34],
+              iconAnchor: [17, 17]
+            });
+
+            const marker = L.marker(latLng, { icon: customIcon }).addTo(leafletMap);
+            const amount = Number(ev.amount || 0);
+            const popupHTML = `
+              <div class="p-1 min-w-[180px]">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Day ${dayIdx + 1} • ${esc(ev.time)}</span>
+                <h5 class="font-bold text-sm text-slate-900 dark:text-white mt-0.5">${esc(ev.title)}</h5>
+                <p class="text-xs text-slate-500 mt-1">📍 ${esc(ev.location || 'Location')}</p>
+                <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <span class="font-extrabold text-xs text-slate-900 dark:text-white">${amount ? '₹' + amount.toLocaleString('en-IN') : 'Free'}</span>
+                  ${ev.mapUrl ? `<a href="${esc(ev.mapUrl)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-bold text-blue-600 hover:underline">Google Maps ↗</a>` : ''}
+                </div>
+              </div>
+            `;
+            marker.bindPopup(popupHTML);
+            mapMarkers[ev.id] = marker;
+          }
+        });
+      });
+
+      if (bounds.length > 0) {
+        leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+      }
+      updateMapRouteLine();
+    }
+
+    function updateMapDayFilterDropdown() {
+      const select = document.getElementById('mapDayFilter');
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = `<option value="all">Show Entire Trip Route</option>`;
+      state.days.forEach((d, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.innerText = `Day ${idx + 1} Route`;
+        select.appendChild(opt);
+      });
+      if ([...select.options].some(o => o.value === current)) select.value = current;
+    }
+
+    function updateMapRouteLine() {
+      if (!leafletMap) return;
+      if (routePolyline) {
+        leafletMap.removeLayer(routePolyline);
+        routePolyline = null;
+      }
+
+      const selectedDayVal = document.getElementById('mapDayFilter').value;
+      const routePoints = [];
+
+      state.days.forEach((day, dayIdx) => {
+        if (selectedDayVal === 'all' || selectedDayVal == dayIdx) {
+          day.events.forEach(ev => {
+            if (ev.lat && ev.lng) {
+              routePoints.push([parseFloat(ev.lat), parseFloat(ev.lng)]);
+            }
+          });
+        }
+      });
+
+      if (routePoints.length > 1) {
+        routePolyline = L.polyline(routePoints, {
+          color: '#2F5BEA',
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '8, 8'
+        }).addTo(leafletMap);
+      }
+    }
+
+    function focusMapOnEvent(eventId) {
+      let ev = null;
+      state.days.forEach(d => d.events.forEach(e => { if (e.id === eventId) ev = e; }));
+      if (!ev) return;
+
+      const mapSec = document.getElementById('mapSection');
+      if (mapSec) mapSec.scrollIntoView({ behavior: 'smooth' });
+
+      if (leafletMap && ev.lat && ev.lng) {
+        leafletMap.setView([parseFloat(ev.lat), parseFloat(ev.lng)], 14, { animate: true });
+        if (mapMarkers[eventId]) {
+          mapMarkers[eventId].openPopup();
+        }
+      }
+    }
+
+    function resetMapView() {
+      document.getElementById('mapDayFilter').value = 'all';
+      updateMapPins();
+    }
+
+    async function geocodeLocationSearch() {
+      const locationName = document.getElementById('eventLocationInput').value;
+      if (!locationName) {
+        alert("Please enter a location or place name to search.");
+        return;
+      }
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(locationName)}`);
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat).toFixed(4);
+          const lng = parseFloat(data[0].lon).toFixed(4);
+          document.getElementById('eventLatInput').value = lat;
+          document.getElementById('eventLngInput').value = lng;
+          alert(`Coordinates found: Lat ${lat}, Lng ${lng}`);
+        } else {
+          alert("Location coordinates could not be automatically found. Please enter Lat/Lng manually.");
+        }
+      } catch (err) {
+        console.error("Geocoding failed", err);
+        alert("Place search failed. Please enter Lat/Lng manually.");
+      }
+    }
+
+    // --- SYNC STATUS BADGE ---
+    function setSyncBadge(mode, text) {
+      const badge = document.getElementById('syncStatusBadge');
+      const connBadge = document.getElementById('supabaseConnBadge');
+      const styles = {
+        local: "px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold text-[11px] rounded-full flex items-center gap-1",
+        live: "px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold text-[11px] rounded-full flex items-center gap-1",
+        busy: "px-2.5 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold text-[11px] rounded-full flex items-center gap-1",
+        error: "px-2.5 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold text-[11px] rounded-full flex items-center gap-1"
+      };
+      if (badge) {
+        badge.className = styles[mode];
+        badge.innerHTML = mode === 'live'
+          ? `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>${esc(text)}</span>`
+          : `<span>${esc(text)}</span>`;
+      }
+      if (connBadge) {
+        const connected = mode === 'live' || mode === 'busy';
+        connBadge.className = connected
+          ? "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          : "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300";
+        connBadge.textContent = connected ? "Connected" : "Not Connected";
+      }
+    }
+
+    // --- SUPABASE REALTIME SYNC ENGINE ---
+    async function initSupabaseSync() {
+      if (SUPABASE_URL.includes('YOUR-PROJECT-ID') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
+        setSyncBadge('error', 'Add Supabase keys in the code');
+        return;
+      }
+
+      try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Initial Data Fetch
+        const { data, error } = await supabaseClient.from('trips').select('data').eq('id', TRIP_ROW_ID).maybeSingle();
+        if (error) throw error;
+
+        if (data && data.data) {
+          state = data.data;
+          safeStore.set('my_trip_data', JSON.stringify(state));
+          renderAll();
+        } else {
+          await syncToDatabase(); // first run: create the trip row
+        }
+
+        // Realtime Subscription Listener (opened once)
+        supabaseClient
+          .channel('trip-' + TRIP_ROW_ID)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'trips', filter: 'id=eq.' + TRIP_ROW_ID }, payload => {
+            if (payload.new && payload.new.data) {
+              state = payload.new.data;
+              safeStore.set('my_trip_data', JSON.stringify(state));
+              renderAll();
+            }
+          })
+          .subscribe();
+
+        setSyncBadge('live', 'Live Sync Active');
+      } catch (err) {
+        console.error("Supabase sync error:", err);
+        setSyncBadge('error', 'Sync error - see console');
+        alert("Could not connect to Supabase: " + (err.message || err));
+      }
+    }
+
+    async function syncToDatabase() {
+      if (!supabaseClient) return;
+      const { error } = await supabaseClient.from('trips').upsert({ id: TRIP_ROW_ID, data: state });
+      if (error) {
+        console.error("Database write error", error);
+        setSyncBadge('error', 'Not saved');
+        if (!saveErrorShown) {
+          alert("Could not save to Supabase: " + error.message);
+          saveErrorShown = true;
+        }
+      } else {
+        saveErrorShown = false;
+        setSyncBadge('live', 'Live Sync Active');
+      }
+    }
+
+    // Theme Switcher
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      safeStore.set('theme', isDark ? 'dark' : 'light');
+    }
+
+    // Date Utilities
+    function getDayDateObj(index) {
+      const parts = (state.startDate || '2026-12-01').split('-').map(Number);
+      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + index));
+    }
+
+    function getDayDateISO(index) {
+      return getDayDateObj(index).toISOString().split('T')[0];
+    }
+
+    function getDayDateFormatted(index) {
+      return getDayDateObj(index).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    }
+
+    // Header Rendering
+    function renderHeaderInfo() {
+      document.getElementById('heroTitle').innerText = state.title || "My trip";
+      document.getElementById('heroDestination').innerText = state.destination || "Destination";
+      document.getElementById('heroDates').innerText = state.days.length > 0
+        ? `${getDayDateFormatted(0)} - ${getDayDateFormatted(state.days.length - 1)}`
+        : '-';
+    }
+
+    function renderSummaryCards() {
+      let grandTotal = 0;
+      let totalEvents = 0;
+
+      state.days.forEach(day => {
+        day.events.forEach(ev => {
+          grandTotal += Number(ev.amount || 0);
+          totalEvents++;
+        });
+      });
+
+      document.getElementById('grandTotalDisplay').innerText = `₹${grandTotal.toLocaleString('en-IN')}`;
+      document.getElementById('totalDaysDisplay').innerText = `${state.days.length} Days`;
+      document.getElementById('totalEventsDisplay').innerText = `${totalEvents} Items`;
+      document.getElementById('dateRangeDisplay').innerText = state.days.length > 0
+        ? `${getDayDateFormatted(0)} to ${getDayDateFormatted(state.days.length - 1)}`
+        : '-';
+    }
+
+    function renderCrewAvatars() {
+      const container = document.getElementById('crewAvatars');
+      container.innerHTML = "";
+
+      state.people.forEach((p) => {
+        const avatar = document.createElement('div');
+        avatar.className = "w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-white dark:ring-slate-800";
+        avatar.style.backgroundColor = p.color || "#3B82F6";
+        avatar.title = p.name;
+        avatar.innerText = p.name.charAt(0).toUpperCase();
+        container.appendChild(avatar);
+      });
+    }
+
+    function renderBuiltInCalendar() {
+      const grid = document.getElementById('calendarGrid');
+      const monthYearLabel = document.getElementById('calendarMonthYear');
+      if (!grid || !monthYearLabel) return;
+
+      if (!calendarViewDate) {
+        const s = getDayDateObj(0);
+        calendarViewDate = new Date(s.getUTCFullYear(), s.getUTCMonth(), 1);
+      }
+
+      grid.innerHTML = "";
+      const year = calendarViewDate.getFullYear();
+      const month = calendarViewDate.getMonth();
+      monthYearLabel.textContent = calendarViewDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+      const tripDatesMap = {};
+      state.days.forEach((day, idx) => {
+        tripDatesMap[getDayDateISO(idx)] = { dayIndex: idx, eventsCount: day.events ? day.events.length : 0 };
+      });
+
+      const firstDayIdx = new Date(year, month, 1).getDay();
+      const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+
+      for (let i = 0; i < firstDayIdx; i++) {
+        const blank = document.createElement('div');
+        blank.className = "h-12 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-transparent";
+        grid.appendChild(blank);
+      }
+
+      for (let d = 1; d <= totalDaysInMonth; d++) {
+        const currentDateISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const tripInfo = tripDatesMap[currentDateISO];
+        const isTripDay = !!tripInfo;
+        const hasEvents = tripInfo && tripInfo.eventsCount > 0;
+
+        const dayCell = document.createElement('div');
+        dayCell.className = `h-12 p-1.5 rounded-2xl border transition-all relative flex flex-col justify-between cursor-pointer ${
+          isTripDay 
+            ? 'bg-blue-50/90 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 hover:scale-105 shadow-sm' 
+            : 'bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700/40 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+        }`;
+
+        dayCell.innerHTML = `
+          <span class="text-xs font-bold ${isTripDay ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'}">${d}</span>
+          ${hasEvents ? '<span class="w-2 h-2 rounded-full bg-blue-600 self-end mb-0.5 mr-0.5"></span>' : ''}
+        `;
+
+        if (isTripDay) {
+          dayCell.title = `Day ${tripInfo.dayIndex + 1}: ${tripInfo.eventsCount} events`;
+          dayCell.onclick = () => {
+            const target = document.getElementById(`day-section-${tripInfo.dayIndex}`);
+            if (target) target.scrollIntoView({ behavior: 'smooth' });
+          };
+        }
+        grid.appendChild(dayCell);
+      }
+    }
+
+    function changeCalMonth(delta) {
+      calendarViewDate.setMonth(calendarViewDate.getMonth() + delta);
+      renderBuiltInCalendar();
+    }
+
+    function setTab(tab) {
+      activeTab = tab;
+      ['tabAll', 'tabDays', 'tabBookings'].forEach(t => {
+        const btn = document.getElementById(t);
+        btn.className = "tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60" + (t === 'tabBookings' ? " flex items-center gap-1.5" : "");
+      });
+      const activeId = tab === 'all' ? 'tabAll' : tab === 'days' ? 'tabDays' : 'tabBookings';
+      document.getElementById(activeId).className = "tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 bg-blue-600 text-white shadow-sm" + (activeId === 'tabBookings' ? " flex items-center gap-1.5" : "");
+      renderItinerary();
+    }
+
+    // Render Itinerary Timeline + Per-Card Document Attachment Panel
+    function renderItinerary() {
+      const container = document.getElementById('itineraryContainer');
+      container.innerHTML = "";
+      let bookingCount = 0;
+      const bookingTypes = ['flight', 'stay', 'train', 'bus', 'cab'];
+
+      state.days.forEach((day, index) => {
+        let filteredEvents = day.events.slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+        if (activeTab === 'bookings') {
+          filteredEvents = filteredEvents.filter(e => bookingTypes.includes(e.type));
+        }
+
+        bookingCount += day.events.filter(e => bookingTypes.includes(e.type)).length;
+        if (activeTab === 'bookings' && filteredEvents.length === 0) return;
+
+        const dayCard = document.createElement('div');
+        dayCard.id = `day-section-${index}`;
+        dayCard.className = "bg-white dark:bg-slate-800/90 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition-all scroll-mt-20";
+
+        const dayDate = getDayDateFormatted(index);
+        let daySubtotal = 0;
+
+        let dayHeaderHTML = `
+          <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 dark:border-slate-700/60">
+            <div class="flex items-baseline gap-3">
+              <span class="text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                Day ${index + 1}
+              </span>
+              <h3 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">${dayDate}</h3>
+            </div>
+            <div class="flex items-center gap-1 sm:gap-2">
+              <button onclick="openEventModal(${index})" class="px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl transition-colors flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span>Add Event</span>
+              </button>
+              <button onclick="deleteDay('${day.id}')" title="Delete Day" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        `;
+
+        let eventsListHTML = `<div class="space-y-4">`;
+
+        if (filteredEvents.length === 0) {
+          eventsListHTML += `
+            <div class="py-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700/60 rounded-2xl">
+              <p class="text-xs sm:text-sm text-slate-400 font-medium">No events planned for this day yet.</p>
+              <button onclick="openEventModal(${index})" class="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">+ Add an activity</button>
+            </div>
+          `;
+        } else {
+          filteredEvents.forEach(ev => {
+            const cat = CATEGORIES[ev.type] || CATEGORIES.note;
+            const itemAmount = Number(ev.amount || 0);
+            daySubtotal += itemAmount;
+
+            let peopleAvatarsHTML = "";
+            if (ev.people && ev.people.length > 0) {
+              peopleAvatarsHTML = `<div class="flex items-center -space-x-1.5 ml-2">`;
+              ev.people.forEach(personName => {
+                const personObj = state.people.find(p => p.name === personName);
+                const bg = personObj ? personObj.color : '#3B82F6';
+                peopleAvatarsHTML += `
+                  <div class="w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-800" style="background-color: ${esc(bg)}" title="${esc(personName)}">
+                    ${esc(personName.charAt(0).toUpperCase())}
+                  </div>
+                `;
+              });
+              peopleAvatarsHTML += `</div>`;
+            }
+
+            // Per-Card File Attachments (Supabase Storage links)
+            let cardFilesHTML = "";
+            const filesList = ev.files || [];
+            if (filesList.length > 0) {
+              cardFilesHTML += `<div class="mt-3 pt-2 border-t border-black/5 dark:border-white/5 flex flex-wrap gap-2">`;
+              filesList.forEach(file => {
+                const targetUrl = file.url || '';
+                cardFilesHTML += `
+                  <div class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/70 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium">
+                    <span class="text-blue-500 font-bold">📁</span>
+                    ${targetUrl ? 
+                      `<a href="${esc(targetUrl)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[140px] text-blue-600 dark:text-blue-400 font-bold hover:underline" title="View Document">${esc(file.name)}</a>` : 
+                      `<span class="truncate max-w-[140px] text-slate-700 dark:text-slate-200">${esc(file.name)}</span>`
+                    }
+                    <button onclick="removeFileFromCard('${day.id}', '${ev.id}', '${file.id}')" class="text-slate-400 hover:text-rose-500 ml-1">✕</button>
+                  </div>
+                `;
+              });
+              cardFilesHTML += `</div>`;
+            }
+
+            eventsListHTML += `
+              <div class="group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border ${cat.bgClass} transition-all hover:shadow-md gap-4">
+                
+                <!-- Category Badge & Main Details -->
+                <div class="flex items-start gap-3.5">
+                  <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-current shadow-sm shrink-0 mt-0.5 sm:mt-0">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">${cat.icon}</svg>
+                  </div>
+
+                  <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-xs font-bold uppercase tracking-wide opacity-80">${cat.label}</span>
+                      <span class="text-xs font-semibold opacity-60">• ${esc(ev.time)}${ev.endTime ? ` - ${esc(ev.endTime)}` : ''}</span>
+                      ${peopleAvatarsHTML}
+                    </div>
+
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white mt-0.5">${esc(ev.title)}</h4>
+                    
+                    ${ev.location ? `
+                      <p class="text-xs sm:text-sm font-medium opacity-85 flex items-center gap-1 mt-1">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <span>${esc(ev.location)}</span>
+                      </p>
+                    ` : ''}
+
+                    ${ev.notes ? `
+                      <p class="text-xs opacity-75 mt-1.5 italic bg-white/40 dark:bg-black/20 px-2.5 py-1 rounded-lg inline-block">
+                        "${esc(ev.notes)}"
+                      </p>
+                    ` : ''}
+
+                    ${cardFilesHTML}
+                  </div>
+                </div>
+
+                <!-- Right Rail: Amount & Card Actions AT THE END -->
+                <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between pt-2 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5 shrink-0 gap-2.5">
+                  <div class="text-left sm:text-right">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block sm:inline">Spent</span>
+                    <span class="text-base font-heading font-extrabold text-slate-900 dark:text-white">
+                      ${itemAmount > 0 ? `₹${itemAmount.toLocaleString('en-IN')}` : '—'}
+                    </span>
+                  </div>
+
+                  <!-- Actions Bar -->
+                  <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                    <!-- PER-CARD ATTACHMENT BUTTON -->
+                    <button onclick="triggerCardFileUpload('${day.id}', '${ev.id}')" title="Attach PDF or file" class="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm border border-black/5 dark:border-white/10 transition-colors flex items-center gap-1">
+                      <span>📎</span>
+                      <span>Attach PDF</span>
+                    </button>
+
+                    ${(ev.lat && ev.lng) ? `
+                      <button onclick="focusMapOnEvent('${ev.id}')" title="Focus location on interactive map" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all flex items-center gap-1">
+                        <span>🗺️</span>
+                        <span>Focus Map</span>
+                      </button>
+                    ` : ''}
+
+                    ${ev.mapUrl ? `
+                      <a href="${esc(ev.mapUrl)}" target="_blank" rel="noopener noreferrer" title="Open in Google Maps" class="px-2 py-1 text-[11px] font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 shadow-sm border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center gap-1">
+                        <span>📍</span>
+                        <span>Google Maps</span>
+                      </a>
+                    ` : (ev.location || ev.title) ? `
+                      <a href="https://maps.google.com/?q=${encodeURIComponent(ev.location || ev.title)}" target="_blank" rel="noopener noreferrer" title="Search on Google Maps" class="px-2 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-slate-600 transition-colors flex items-center gap-1">
+                        <span>🔍</span>
+                        <span>Maps</span>
+                      </a>
+                    ` : ''}
+
+                    <button onclick="exportToGoogleCalendar(${index}, '${ev.id}')" title="Add to Google Calendar" class="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm border border-black/5 dark:border-white/10 transition-colors flex items-center gap-1">
+                      <svg class="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
+                      <span>gCal</span>
+                    </button>
+
+                    <button onclick="openEventModal(${index}, '${ev.id}')" title="Edit Event" class="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white rounded-lg hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    </button>
+
+                    <button onclick="deleteEvent('${day.id}', '${ev.id}')" title="Delete Event" class="p-1 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            `;
+          });
+        }
+
+        eventsListHTML += `</div>`;
+
+        const dailySubtotalHTML = `
+          <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 px-4 py-2.5 rounded-2xl">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Day ${index + 1} Subtotal</span>
+            <span class="text-base font-heading font-extrabold text-blue-600 dark:text-blue-400">₹${daySubtotal.toLocaleString('en-IN')}</span>
+          </div>
+        `;
+
+        dayCard.innerHTML = dayHeaderHTML + eventsListHTML + dailySubtotalHTML;
+        container.appendChild(dayCard);
+      });
+
+      document.getElementById('bookingBadgeCount').innerText = bookingCount;
+    }
+
+    // Hidden Card File Input Trigger
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,.pdf';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    // Supabase Storage Upload Handler
+    fileInput.onchange = async function(e) {
+      const file = e.target.files[0];
+      if (!file || !targetCardIdForUpload) return;
+
+      if (!supabaseClient) {
+        alert("Supabase is not connected, so files can't be uploaded yet.");
+        targetCardIdForUpload = null;
+        fileInput.value = '';
+        return;
+      }
+
+      const { dayId, eventId } = targetCardIdForUpload;
+      const safeName = file.name.replace(/[^\w.\-]/g, '_');   // Supabase rejects spaces/brackets in file paths
+      const path = `${eventId}/${Date.now()}-${safeName}`;
+
+      setSyncBadge('busy', 'Uploading...');
+
+      try {
+        // STEP 1: Upload the file to the Supabase Storage bucket
+        const { error } = await supabaseClient.storage
+          .from(STORAGE_BUCKET)
+          .upload(path, file, { contentType: file.type || 'application/pdf', upsert: false });
+        if (error) throw error;
+
+        // STEP 2: Get a public link anyone with the page can open
+        const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+
+        // STEP 3: Save to Application State
+        const day = state.days.find(d => d.id === dayId);
+        const ev = day ? day.events.find(x => x.id === eventId) : null;
+        if (ev) {
+          if (!ev.files) ev.files = [];
+          ev.files.push({
+            id: uid('file'),
+            name: file.name,
+            size: (file.size / 1024).toFixed(0) + " KB",
+            url: data.publicUrl,
+            path: path
+          });
+          saveState();
+        }
+      } catch (err) {
+        console.error("Supabase Upload Error:", err);
+        setSyncBadge('error', 'Upload failed');
+        alert("Upload failed: " + (err.message || err));
+      } finally {
+        targetCardIdForUpload = null;
+        fileInput.value = '';
+      }
+    };
+
+    function triggerCardFileUpload(dayId, eventId) {
+      targetCardIdForUpload = { dayId, eventId };
+      fileInput.click();
+    }
+
+    // Delete files from Supabase Storage
+    async function deleteStoredFiles(paths) {
+      const list = paths.filter(Boolean);
+      if (!supabaseClient || list.length === 0) return;
+      const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).remove(list);
+      if (error) console.error("Could not delete stored files:", error);
+    }
+
+    function removeFileFromCard(dayId, eventId, fileId) {
+      const day = state.days.find(d => d.id === dayId);
+      if (day) {
+        const ev = day.events.find(e => e.id === eventId);
+        if (ev && ev.files) {
+          const file = ev.files.find(f => f.id === fileId);
+          if (!file || !confirm("Remove " + file.name + "?")) return;
+          ev.files = ev.files.filter(f => f.id !== fileId);
+          deleteStoredFiles([file.path]);
+          saveState();
+        }
+      }
+    }
+
+    // Add / Delete Day Operations
+    function addNewDay() {
+      state.days.push({ id: uid('day'), events: [] });
+      saveState();
+    }
+
+    function deleteDay(dayId) {
+      if (state.days.length <= 1) {
+        alert("Trip must have at least 1 day!");
+        return;
+      }
+      const day = state.days.find(d => d.id === dayId);
+      if (!day || !confirm("Delete this day and all its events?")) return;
+      deleteStoredFiles(day.events.flatMap(e => (e.files || []).map(f => f.path)));
+      state.days = state.days.filter(d => d.id !== dayId);
+      saveState();
+    }
+
+    function deleteEvent(dayId, eventId) {
+      const day = state.days.find(d => d.id === dayId);
+      if (day) {
+        const ev = day.events.find(e => e.id === eventId);
+        if (!ev || !confirm("Delete this event?")) return;
+        deleteStoredFiles((ev.files || []).map(f => f.path));
+        day.events = day.events.filter(e => e.id !== eventId);
+        saveState();
+      }
+    }
+
+    function populateCategoryOptions() {
+      const container = document.getElementById('categoryOptions');
+      container.innerHTML = "";
+
+      Object.keys(CATEGORIES).forEach((key) => {
+        const cat = CATEGORIES[key];
+        const btn = document.createElement('button');
+        btn.type = "button";
+        btn.onclick = () => selectCategory(key);
+        btn.id = `catBtn-${key}`;
+        btn.className = `p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all ${key === 'flight' ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`;
+        btn.innerHTML = `
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">${cat.icon}</svg>
+          <span class="text-[10px]">${cat.label}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function selectCategory(catKey) {
+      document.getElementById('eventType').value = catKey;
+      Object.keys(CATEGORIES).forEach(k => {
+        const btn = document.getElementById(`catBtn-${k}`);
+        if (k === catKey) {
+          btn.className = "p-2 rounded-xl border border-blue-500 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all";
+        } else {
+          btn.className = "p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all";
+        }
+      });
+    }
+
+    // Event Modal
+    function openEventModal(dayIndex = 0, eventId = null) {
+      const modal = document.getElementById('eventModal');
+      const daySelect = document.getElementById('eventDayIndex');
+
+      document.getElementById('eventForm').reset();
+      
+      daySelect.innerHTML = "";
+      state.days.forEach((d, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.innerText = `Day ${idx + 1} (${getDayDateFormatted(idx)})`;
+        if (idx === dayIndex) opt.selected = true;
+        daySelect.appendChild(opt);
+      });
+
+      const crewContainer = document.getElementById('crewSelectionList');
+      crewContainer.innerHTML = "";
+      state.people.forEach(p => {
+        const label = document.createElement('label');
+        label.className = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium cursor-pointer bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300";
+        label.innerHTML = `
+          <input type="checkbox" name="assignedCrew" value="${esc(p.name)}" class="rounded text-blue-600 focus:ring-blue-500">
+          <span>${esc(p.name)}</span>
+        `;
+        crewContainer.appendChild(label);
+      });
+
+      if (eventId) {
+        document.getElementById('eventModalTitle').innerText = "Edit Event & Location";
+        document.getElementById('eventId').value = eventId;
+        
+        let foundEv = null;
+        state.days.forEach(d => {
+          const ev = d.events.find(e => e.id === eventId);
+          if (ev) foundEv = ev;
+        });
+
+        if (foundEv) {
+          selectCategory(foundEv.type);
+          document.getElementById('eventTitleInput').value = foundEv.title;
+          document.getElementById('eventAmountInput').value = foundEv.amount || '';
+          document.getElementById('eventLocationInput').value = foundEv.location || '';
+          document.getElementById('eventLatInput').value = foundEv.lat || '';
+          document.getElementById('eventLngInput').value = foundEv.lng || '';
+          document.getElementById('eventMapUrlInput').value = foundEv.mapUrl || '';
+          document.getElementById('eventStartTimeInput').value = foundEv.time || '10:00';
+          document.getElementById('eventEndTimeInput').value = foundEv.endTime || '';
+          document.getElementById('eventNotesInput').value = foundEv.notes || '';
+
+          if (foundEv.people) {
+            document.querySelectorAll('input[name="assignedCrew"]').forEach(cb => {
+              if (foundEv.people.includes(cb.value)) cb.checked = true;
+            });
+          }
+        }
+      } else {
+        document.getElementById('eventModalTitle').innerText = "Add New Event & Location";
+        document.getElementById('eventId').value = "";
+        selectCategory('flight');
+      }
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('scale-95');
+      }, 10);
+    }
+
+    function closeEventModal() {
+      const modal = document.getElementById('eventModal');
+      modal.classList.add('opacity-0');
+      modal.firstElementChild.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    function handleSaveEvent(e) {
+      e.preventDefault();
+      
+      const dayIndex = parseInt(document.getElementById('eventDayIndex').value);
+      const eventId = document.getElementById('eventId').value;
+      const type = document.getElementById('eventType').value;
+      const title = document.getElementById('eventTitleInput').value.trim();
+      const amount = parseFloat(document.getElementById('eventAmountInput').value) || 0;
+      const location = document.getElementById('eventLocationInput').value.trim();
+      const lat = document.getElementById('eventLatInput').value ? parseFloat(document.getElementById('eventLatInput').value) : null;
+      const lng = document.getElementById('eventLngInput').value ? parseFloat(document.getElementById('eventLngInput').value) : null;
+      const mapUrl = document.getElementById('eventMapUrlInput').value.trim();
+      const time = document.getElementById('eventStartTimeInput').value;
+      const endTime = document.getElementById('eventEndTimeInput').value;
+      const notes = document.getElementById('eventNotesInput').value.trim();
+
+      const assignedPeople = [];
+      document.querySelectorAll('input[name="assignedCrew"]:checked').forEach(cb => {
+        assignedPeople.push(cb.value);
+      });
+
+      let existingFiles = [];
+      if (eventId) {
+        state.days.forEach(d => {
+          const found = d.events.find(ev => ev.id === eventId);
+          if (found && found.files) existingFiles = found.files;
+          d.events = d.events.filter(ev => ev.id !== eventId);
+        });
+      }
+
+      const eventData = {
+        id: eventId || uid('ev'),
+        type,
+        title,
+        amount,
+        location,
+        lat,
+        lng,
+        mapUrl,
+        time,
+        endTime,
+        notes,
+        people: assignedPeople,
+        files: existingFiles
+      };
+
+      state.days[dayIndex].events.push(eventData);
+      state.days[dayIndex].events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+      saveState();
+      closeEventModal();
+    }
+
+    // Settings Modal
+    function openSettingsModal() {
+      const modal = document.getElementById('settingsModal');
+      document.getElementById('settingsTitle').value = state.title || '';
+      document.getElementById('settingsDestination').value = state.destination || '';
+      document.getElementById('settingsStartDate').value = state.startDate || '';
+      document.getElementById('settingsPeople').value = state.people.map(p => p.name).join(", ");
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('scale-95');
+      }, 10);
+    }
+
+    function closeSettingsModal() {
+      const modal = document.getElementById('settingsModal');
+      modal.classList.add('opacity-0');
+      modal.firstElementChild.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    function handleSaveSettings(e) {
+      e.preventDefault();
+
+      state.title = document.getElementById('settingsTitle').value.trim() || "My trip";
+      state.destination = document.getElementById('settingsDestination').value.trim();
+      state.startDate = document.getElementById('settingsStartDate').value || state.startDate;
+
+      const peopleRaw = document.getElementById('settingsPeople').value.split(",");
+      const colors = ["#E0603A", "#2F8F6B", "#7A4FD6", "#3B82F6", "#D2416E", "#C77700"];
+      
+      state.people = peopleRaw.map((name, i) => {
+        const trimmed = name.trim();
+        const existing = state.people.find(p => p.name === trimmed);
+        return {
+          name: trimmed,
+          color: existing ? existing.color : colors[i % colors.length]
+        };
+      }).filter(p => p.name.length > 0);
+
+      calendarViewDate = null; // jump the calendar to the new start month
+      saveState();
+      closeSettingsModal();
+    }
+
+    // Google Calendar link (looks the event up by id, so apostrophes can't break it)
+    function exportToGoogleCalendar(dayIndex, eventId) {
+      const day = state.days[dayIndex];
+      const ev = day ? day.events.find(e => e.id === eventId) : null;
+      if (!ev) return;
+
+      const date = getDayDateISO(dayIndex).replace(/-/g, '');
+      const start = (ev.time || '09:00').replace(':', '') + '00';
+      let endDate = date;
+      let end;
+      if (ev.endTime) {
+        end = ev.endTime.replace(':', '') + '00';
+        if (end <= start) endDate = getDayDateISO(dayIndex + 1).replace(/-/g, ''); // ends after midnight
+      } else {
+        end = String(Math.min(23, parseInt(start.slice(0, 2), 10) + 1)).padStart(2, '0') + start.slice(2);
+      }
+
+      const details = [ev.notes, (ev.files || []).map(f => f.name + ': ' + f.url).join('\n')].filter(Boolean).join('\n\n');
+      const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+        + '&text=' + encodeURIComponent(ev.title || '')
+        + '&dates=' + `${date}T${start}/${endDate}T${end}`
+        + '&details=' + encodeURIComponent(details)
+        + '&location=' + encodeURIComponent(ev.location || '')
+        + '&ctz=' + encodeURIComponent(TIMEZONE);
+
+      window.open(gcalUrl, '_blank');
+    }
+  </script>
+</body>
+</html>
