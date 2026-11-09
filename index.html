@@ -628,7 +628,7 @@
             const amount = Number(ev.amount || 0);
             const popupHTML = `
               <div class="p-1 min-w-[180px]">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Day ${dayIdx + 1}${ev.time ? ' • ' + esc(ev.time) : ''}</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">${dayLabel(dayIdx)}${ev.time ? ' • ' + esc(ev.time) : ''}</span>
                 <h5 class="font-bold text-sm text-slate-900 dark:text-white mt-0.5">${esc(ev.title)}</h5>
                 <p class="text-xs text-slate-500 mt-1">📍 ${esc(ev.location || 'Location')}</p>
                 <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
@@ -657,7 +657,7 @@
       state.days.forEach((d, idx) => {
         const opt = document.createElement('option');
         opt.value = idx;
-        opt.innerText = `Day ${idx + 1} Route`;
+        opt.innerText = `${dayLabel(idx)} Route`;
         select.appendChild(opt);
       });
       if ([...select.options].some(o => o.value === current)) select.value = current;
@@ -829,26 +829,63 @@
     }
 
     // Date Utilities
-    function getDayDateObj(index) {
+    // A card can cover several dates: day.span = number of dates (default 1)
+    function daySpan(day) { return Math.max(1, parseInt(day && day.span, 10) || 1); }
+
+    // How many dates come before this card
+    function dayOffset(index) {
+      let total = 0;
+      for (let i = 0; i < index && i < state.days.length; i++) total += daySpan(state.days[i]);
+      return total;
+    }
+
+    function totalTripDays() { return dayOffset(state.days.length); }
+
+    function dateFromOffset(offset) {
       const parts = (state.startDate || '2026-12-01').split('-').map(Number);
-      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + index));
+      return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + offset));
     }
+    function isoFromOffset(offset) { return dateFromOffset(offset).toISOString().split('T')[0]; }
+    function formatDate(d) { return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); }
 
-    function getDayDateISO(index) {
-      return getDayDateObj(index).toISOString().split('T')[0];
-    }
+    // First date of a card
+    function getDayDateObj(index) { return dateFromOffset(dayOffset(index)); }
+    function getDayDateISO(index) { return isoFromOffset(dayOffset(index)); }
+    // Last date of a card
+    function getDayEndOffset(index) { return dayOffset(index) + daySpan(state.days[index]) - 1; }
 
+    // "Mon, Dec 1" or "Wed, Dec 3 – Fri, Dec 5" for a combined card
     function getDayDateFormatted(index) {
-      return getDayDateObj(index).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      const start = dayOffset(index);
+      const end = getDayEndOffset(index);
+      return start === end ? formatDate(dateFromOffset(start)) : `${formatDate(dateFromOffset(start))} – ${formatDate(dateFromOffset(end))}`;
+    }
+
+    // "Day 3" or "Days 3–5"
+    function dayLabel(index) {
+      const start = dayOffset(index) + 1;
+      const end = getDayEndOffset(index) + 1;
+      return start === end ? `Day ${start}` : `Days ${start}–${end}`;
+    }
+
+    function tripRangeText(joiner) {
+      if (state.days.length === 0) return '-';
+      return `${formatDate(dateFromOffset(0))}${joiner}${formatDate(dateFromOffset(totalTripDays() - 1))}`;
+    }
+
+    // Change how many dates a card covers
+    function setDaySpan(dayId, value) {
+      const day = state.days.find(d => d.id === dayId);
+      if (!day) return;
+      day.span = Math.max(1, Math.min(60, parseInt(value, 10) || 1));
+      saveState();
     }
 
     // Header Rendering
     function renderHeaderInfo() {
       document.getElementById('heroTitle').innerText = state.title || "My trip";
       document.getElementById('heroDestination').innerText = state.destination || "Destination";
-      document.getElementById('heroDates').innerText = state.days.length > 0
-        ? `${getDayDateFormatted(0)} - ${getDayDateFormatted(state.days.length - 1)}`
-        : '-';
+      document.getElementById('heroDates').innerText = tripRangeText(' - ');
     }
 
     function renderSummaryCards() {
@@ -863,11 +900,10 @@
       });
 
       document.getElementById('grandTotalDisplay').innerText = `₹${grandTotal.toLocaleString('en-IN')}`;
-      document.getElementById('totalDaysDisplay').innerText = `${state.days.length} Days`;
+      const tripDays = totalTripDays();
+      document.getElementById('totalDaysDisplay').innerText = `${tripDays} ${tripDays === 1 ? 'Day' : 'Days'}`;
       document.getElementById('totalEventsDisplay').innerText = `${totalEvents} Items`;
-      document.getElementById('dateRangeDisplay').innerText = state.days.length > 0
-        ? `${getDayDateFormatted(0)} to ${getDayDateFormatted(state.days.length - 1)}`
-        : '-';
+      document.getElementById('dateRangeDisplay').innerText = tripRangeText(' to ');
     }
 
     function renderCrewAvatars() {
@@ -901,7 +937,10 @@
 
       const tripDatesMap = {};
       state.days.forEach((day, idx) => {
-        tripDatesMap[getDayDateISO(idx)] = { dayIndex: idx, eventsCount: day.events ? day.events.length : 0 };
+        const first = dayOffset(idx);
+        for (let k = 0; k < daySpan(day); k++) {
+          tripDatesMap[isoFromOffset(first + k)] = { dayIndex: idx, eventsCount: k === 0 && day.events ? day.events.length : 0 };
+        }
       });
 
       const firstDayIdx = new Date(year, month, 1).getDay();
@@ -932,7 +971,7 @@
         `;
 
         if (isTripDay) {
-          dayCell.title = `Day ${tripInfo.dayIndex + 1}: ${tripInfo.eventsCount} events`;
+          dayCell.title = `${dayLabel(tripInfo.dayIndex)}: ${state.days[tripInfo.dayIndex].events.length} events`;
           dayCell.onclick = () => {
             const target = document.getElementById(`day-section-${tripInfo.dayIndex}`);
             if (target) target.scrollIntoView({ behavior: 'smooth' });
@@ -985,12 +1024,18 @@
         let dayHeaderHTML = `
           <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 dark:border-slate-700/60">
             <div class="flex items-baseline gap-3">
-              <span class="text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                Day ${index + 1}
+              <span class="text-xs font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                ${dayLabel(index)}
               </span>
               <h3 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">${dayDate}</h3>
             </div>
             <div class="flex items-center gap-1 sm:gap-2">
+              <label class="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400" title="Combine several dates into this card">
+                <span class="hidden sm:inline">Covers</span>
+                <select onchange="setDaySpan('${day.id}', this.value)" class="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-[11px] font-semibold outline-none">
+                  ${Array.from({ length: Math.max(14, daySpan(day)) }, (_, n) => n + 1).map(n => `<option value="${n}" ${n === daySpan(day) ? 'selected' : ''}>${n} ${n === 1 ? 'day' : 'days'}</option>`).join('')}
+                </select>
+              </label>
               <button onclick="openEventModal(${index})" class="px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl transition-colors flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 <span>Add Event</span>
@@ -1007,7 +1052,7 @@
         if (filteredEvents.length === 0) {
           eventsListHTML += `
             <div class="py-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700/60 rounded-2xl">
-              <p class="text-xs sm:text-sm text-slate-400 font-medium">No events planned for this day yet.</p>
+              <p class="text-xs sm:text-sm text-slate-400 font-medium">${daySpan(day) > 1 ? 'No plans on these days yet. Free days to relax!' : 'No events planned for this day yet.'}</p>
               <button onclick="openEventModal(${index})" class="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">+ Add an activity</button>
             </div>
           `;
@@ -1148,7 +1193,7 @@
 
         const dailySubtotalHTML = `
           <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 px-4 py-2.5 rounded-2xl">
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Day ${index + 1} Subtotal</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">${dayLabel(index)} Subtotal</span>
             <span class="text-base font-heading font-extrabold text-blue-600 dark:text-blue-400">₹${daySubtotal.toLocaleString('en-IN')}</span>
           </div>
         `;
@@ -1258,7 +1303,7 @@
         return;
       }
       const day = state.days.find(d => d.id === dayId);
-      if (!day || !confirm("Delete this day and all its events?")) return;
+      if (!day || !confirm(`Delete ${dayLabel(state.days.indexOf(day))} and all its events?`)) return;
       deleteStoredFiles(day.events.flatMap(e => (e.files || []).map(f => f.path)));
       state.days = state.days.filter(d => d.id !== dayId);
       saveState();
@@ -1316,7 +1361,7 @@
       state.days.forEach((d, idx) => {
         const opt = document.createElement('option');
         opt.value = idx;
-        opt.innerText = `Day ${idx + 1} (${getDayDateFormatted(idx)})`;
+        opt.innerText = `${dayLabel(idx)} (${getDayDateFormatted(idx)})`;
         if (idx === dayIndex) opt.selected = true;
         daySelect.appendChild(opt);
       });
@@ -1491,10 +1536,11 @@
       if (!ev) return;
 
       const date = getDayDateISO(dayIndex).replace(/-/g, '');
-      const nextDate = getDayDateISO(dayIndex + 1).replace(/-/g, '');
+      const nextDate = isoFromOffset(dayOffset(dayIndex) + 1).replace(/-/g, '');
+      const afterCard = isoFromOffset(getDayEndOffset(dayIndex) + 1).replace(/-/g, '');
       let datesParam;
       if (!ev.time) {
-        datesParam = `${date}/${nextDate}`; // no time given: all-day event
+        datesParam = `${date}/${afterCard}`; // no time given: all-day event across the card's dates
       } else {
         const start = ev.time.replace(':', '') + '00';
         let endDate = date;
