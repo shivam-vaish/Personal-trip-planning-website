@@ -387,8 +387,8 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Start Time</label>
-            <input type="time" id="eventStartTimeInput" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Start Time (Optional)</label>
+            <input type="time" id="eventStartTimeInput" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
           </div>
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">End Time (Optional)</label>
@@ -531,6 +531,25 @@
       note:     { label: "Note",     color: "#6B7A8F", bgClass: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700", icon: `<path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>` }
     };
 
+    // Colours for the category picker in the Add/Edit Event window
+    const CATEGORY_PICK = {
+      flight:   { on: "border-blue-500 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500",           off: "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40" },
+      stay:     { on: "border-purple-500 bg-purple-50 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 ring-2 ring-purple-500", off: "text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40" },
+      train:    { on: "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 ring-2 ring-emerald-500", off: "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" },
+      bus:      { on: "border-teal-500 bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-300 ring-2 ring-teal-500",           off: "text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40" },
+      cab:      { on: "border-slate-500 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 ring-2 ring-slate-500",       off: "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" },
+      food:     { on: "border-amber-500 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 ring-2 ring-amber-500",     off: "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40" },
+      activity: { on: "border-rose-500 bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 ring-2 ring-rose-500",           off: "text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40" },
+      note:     { on: "border-gray-500 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 ring-2 ring-gray-500",             off: "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" }
+    };
+
+    // Colours for the tab bar (each tab gets its own colour when selected)
+    const TAB_COLORS = {
+      tabAll:      { on: "bg-blue-600 text-white",    off: "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40" },
+      tabDays:     { on: "bg-violet-600 text-white",  off: "text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40" },
+      tabBookings: { on: "bg-emerald-600 text-white", off: "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40" }
+    };
+
     let activeTab = "all";
     let calendarViewDate = null;
     let leafletMap = null;
@@ -549,6 +568,7 @@
 
       initLeafletMap();
       populateCategoryOptions();
+      setTab(activeTab);
       renderAll();
       initSupabaseSync();
     };
@@ -608,7 +628,7 @@
             const amount = Number(ev.amount || 0);
             const popupHTML = `
               <div class="p-1 min-w-[180px]">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Day ${dayIdx + 1} • ${esc(ev.time)}</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">Day ${dayIdx + 1}${ev.time ? ' • ' + esc(ev.time) : ''}</span>
                 <h5 class="font-bold text-sm text-slate-900 dark:text-white mt-0.5">${esc(ev.title)}</h5>
                 <p class="text-xs text-slate-500 mt-1">📍 ${esc(ev.location || 'Location')}</p>
                 <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
@@ -928,12 +948,13 @@
 
     function setTab(tab) {
       activeTab = tab;
-      ['tabAll', 'tabDays', 'tabBookings'].forEach(t => {
-        const btn = document.getElementById(t);
-        btn.className = "tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60" + (t === 'tabBookings' ? " flex items-center gap-1.5" : "");
-      });
       const activeId = tab === 'all' ? 'tabAll' : tab === 'days' ? 'tabDays' : 'tabBookings';
-      document.getElementById(activeId).className = "tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 bg-blue-600 text-white shadow-sm" + (activeId === 'tabBookings' ? " flex items-center gap-1.5" : "");
+      ['tabAll', 'tabDays', 'tabBookings'].forEach(t => {
+        const isOn = t === activeId;
+        document.getElementById(t).className = "tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm transition-all duration-200 " +
+          (isOn ? "font-semibold shadow-sm " + TAB_COLORS[t].on : "font-medium " + TAB_COLORS[t].off) +
+          (t === 'tabBookings' ? " flex items-center gap-1.5" : "");
+      });
       renderItinerary();
     }
 
@@ -945,7 +966,7 @@
       const bookingTypes = ['flight', 'stay', 'train', 'bus', 'cab'];
 
       state.days.forEach((day, index) => {
-        let filteredEvents = day.events.slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+        let filteredEvents = day.events.slice().sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
         if (activeTab === 'bookings') {
           filteredEvents = filteredEvents.filter(e => bookingTypes.includes(e.type));
         }
@@ -1043,7 +1064,7 @@
                   <div>
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="text-xs font-bold uppercase tracking-wide opacity-80">${cat.label}</span>
-                      <span class="text-xs font-semibold opacity-60">• ${esc(ev.time)}${ev.endTime ? ` - ${esc(ev.endTime)}` : ''}</span>
+                      ${ev.time ? `<span class="text-xs font-semibold opacity-60">• ${esc(ev.time)}${ev.endTime ? ` - ${esc(ev.endTime)}` : ''}</span>` : (ev.endTime ? `<span class="text-xs font-semibold opacity-60">• until ${esc(ev.endTime)}</span>` : '')}
                       ${peopleAvatarsHTML}
                     </div>
 
@@ -1263,24 +1284,23 @@
         btn.type = "button";
         btn.onclick = () => selectCategory(key);
         btn.id = `catBtn-${key}`;
-        btn.className = `p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all ${key === 'flight' ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`;
+        btn.className = "p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all";
         btn.innerHTML = `
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">${cat.icon}</svg>
           <span class="text-[10px]">${cat.label}</span>
         `;
         container.appendChild(btn);
       });
+      selectCategory(document.getElementById('eventType').value || 'flight');
     }
 
     function selectCategory(catKey) {
       document.getElementById('eventType').value = catKey;
       Object.keys(CATEGORIES).forEach(k => {
         const btn = document.getElementById(`catBtn-${k}`);
-        if (k === catKey) {
-          btn.className = "p-2 rounded-xl border border-blue-500 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all";
-        } else {
-          btn.className = "p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all";
-        }
+        const pick = CATEGORY_PICK[k] || CATEGORY_PICK.note;
+        btn.className = "p-2 rounded-xl border flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-all " +
+          (k === catKey ? pick.on : "border-slate-200 dark:border-slate-700 " + pick.off);
       });
     }
 
@@ -1330,7 +1350,7 @@
           document.getElementById('eventLatInput').value = foundEv.lat || '';
           document.getElementById('eventLngInput').value = foundEv.lng || '';
           document.getElementById('eventMapUrlInput').value = foundEv.mapUrl || '';
-          document.getElementById('eventStartTimeInput').value = foundEv.time || '10:00';
+          document.getElementById('eventStartTimeInput').value = foundEv.time || '';
           document.getElementById('eventEndTimeInput').value = foundEv.endTime || '';
           document.getElementById('eventNotesInput').value = foundEv.notes || '';
 
@@ -1409,7 +1429,7 @@
       };
 
       state.days[dayIndex].events.push(eventData);
-      state.days[dayIndex].events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      state.days[dayIndex].events.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
 
       saveState();
       closeEventModal();
@@ -1470,20 +1490,27 @@
       if (!ev) return;
 
       const date = getDayDateISO(dayIndex).replace(/-/g, '');
-      const start = (ev.time || '09:00').replace(':', '') + '00';
-      let endDate = date;
-      let end;
-      if (ev.endTime) {
-        end = ev.endTime.replace(':', '') + '00';
-        if (end <= start) endDate = getDayDateISO(dayIndex + 1).replace(/-/g, ''); // ends after midnight
+      const nextDate = getDayDateISO(dayIndex + 1).replace(/-/g, '');
+      let datesParam;
+      if (!ev.time) {
+        datesParam = `${date}/${nextDate}`; // no time given: all-day event
       } else {
-        end = String(Math.min(23, parseInt(start.slice(0, 2), 10) + 1)).padStart(2, '0') + start.slice(2);
+        const start = ev.time.replace(':', '') + '00';
+        let endDate = date;
+        let end;
+        if (ev.endTime) {
+          end = ev.endTime.replace(':', '') + '00';
+          if (end <= start) endDate = nextDate; // ends after midnight
+        } else {
+          end = String(Math.min(23, parseInt(start.slice(0, 2), 10) + 1)).padStart(2, '0') + start.slice(2);
+        }
+        datesParam = `${date}T${start}/${endDate}T${end}`;
       }
 
       const details = [ev.notes, (ev.files || []).map(f => f.name + ': ' + f.url).join('\n')].filter(Boolean).join('\n\n');
       const gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
         + '&text=' + encodeURIComponent(ev.title || '')
-        + '&dates=' + `${date}T${start}/${endDate}T${end}`
+        + '&dates=' + datesParam
         + '&details=' + encodeURIComponent(details)
         + '&location=' + encodeURIComponent(ev.location || '')
         + '&ctz=' + encodeURIComponent(TIMEZONE);
