@@ -1200,6 +1200,18 @@
 
         dayCard.innerHTML = dayHeaderHTML + eventsListHTML + dailySubtotalHTML;
         container.appendChild(dayCard);
+
+        
+        // "Insert day here" button between cards (shifts every later card forward)
+        if (activeTab !== 'bookings' && index < state.days.length - 1) {
+          const divider = document.createElement('div');
+          divider.className = "flex justify-center -my-4";
+          divider.innerHTML = `
+            <button onclick="insertDayAfter(${index})" class="px-3 py-1 text-[11px] font-semibold rounded-full border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 bg-white/60 dark:bg-slate-800/60 transition-colors">
+              + Insert day here
+            </button>`;
+          container.appendChild(divider);
+        }
       });
 
       document.getElementById('bookingBadgeCount').innerText = bookingCount;
@@ -1289,6 +1301,16 @@
           saveState();
         }
       }
+    }
+
+    // Insert a new day after card number `index`; every later card moves forward by one date
+    function insertDayAfter(index) {
+      state.days.splice(index + 1, 0, { id: uid('day'), events: [] });
+      saveState();
+      setTimeout(() => {
+        const el = document.getElementById(`day-section-${index + 1}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
     }
 
     // Add / Delete Day Operations
