@@ -1201,7 +1201,6 @@
         dayCard.innerHTML = dayHeaderHTML + eventsListHTML + dailySubtotalHTML;
         container.appendChild(dayCard);
 
-        
         // "Insert day here" button between cards (shifts every later card forward)
         if (activeTab !== 'bookings' && index < state.days.length - 1) {
           const divider = document.createElement('div');
@@ -1303,6 +1302,7 @@
       }
     }
 
+    // Add / Delete Day Operations
     // Insert a new day after card number `index`; every later card moves forward by one date
     function insertDayAfter(index) {
       state.days.splice(index + 1, 0, { id: uid('day'), events: [] });
@@ -1313,7 +1313,6 @@
       }, 50);
     }
 
-    // Add / Delete Day Operations
     function addNewDay() {
       state.days.push({ id: uid('day'), events: [] });
       saveState();
